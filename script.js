@@ -1,8 +1,8 @@
 /**
- * THE PIGEON - Final v24 (Real-time Audio & Mute Fix)
- * - Fix: Echtzeit-Sounds für alle Pinsel stabilisiert
- * - Fix: Mute/Volume Änderungen wirken sofort
- * - Fix: Instant Stop & Particle Consistency
+ * THE PIGEON - Final v26 (Harmonize & Scale Fix)
+ * - Fix: Harmonize-Checkbox schaltet das Scale-Menü sofort sichtbar
+ * - Fix: Frequenzen rasten beim Zeichnen und Abspielen korrekt in die Tonleiter ein
+ * - Inklusive Dynamics Compressor, Live-Filter und Taktraster
  */
 
 let patternBanks = { A: [null, null, null, null], B: [null, null, null, null], C: [null, null, null, null] };
@@ -23,13 +23,13 @@ function getDistortionCurve() {
 function drawSegmentStandard(ctx, pts, idx1, idx2, size) { ctx.lineWidth = size; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(pts[idx1].x, pts[idx1].y); ctx.lineTo(pts[idx2].x, pts[idx2].y); ctx.stroke(); }
 function drawSegmentVariable(ctx, pts, idx1, idx2, size) { const dist = Math.hypot(pts[idx2].x - pts[idx1].x, pts[idx2].y - pts[idx1].y); ctx.lineWidth = size * (1 + Math.max(0, (10 - dist) / 5)); ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(pts[idx1].x, pts[idx1].y); ctx.lineTo(pts[idx2].x, pts[idx2].y); ctx.stroke(); }
 function drawSegmentCalligraphy(ctx, pts, idx1, idx2, size) { const angle = -Math.PI / 4, dx = Math.cos(angle) * size, dy = Math.sin(angle) * size; ctx.fillStyle = "#000"; ctx.beginPath(); ctx.moveTo(pts[idx1].x - dx, pts[idx1].y - dy); ctx.lineTo(pts[idx1].x + dx, pts[idx1].y + dy); ctx.lineTo(pts[idx2].x + dx, pts[idx2].y + dy); ctx.lineTo(pts[idx2].x - dx, pts[idx2].y - dy); ctx.fill(); }
-function drawSegmentParticles(ctx, pts, idx1, idx2, size) { ctx.fillStyle = "rgba(0,0,0,0.6)"; for(let i=0; i<1; i++) { const ox = (Math.random()-0.5)*size*2, oy = (Math.random()-0.5)*size*2; ctx.beginPath(); ctx.arc(pts[idx2].x+ox, pts[idx2].y+oy, Math.max(1, size/3), 0, Math.PI*2); ctx.fill(); } }
+function drawSegmentParticles(ctx, pts, idx1, idx2, size) { ctx.fillStyle = "rgba(0,0,0,0.6)"; for(let i=0; i<2; i++) { const ox = (Math.random()-0.5)*size*2, oy = (Math.random()-0.5)*size*2; ctx.beginPath(); ctx.arc(pts[idx2].x+ox, pts[idx2].y+oy, Math.max(1, size/3), 0, Math.PI*2); ctx.fill(); } }
 function drawSegmentFractal(ctx, pts, idx1, idx2, size) { ctx.lineWidth = size; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(pts[idx1].x + (pts[idx1].jX||0), pts[idx1].y + (pts[idx1].jY||0)); ctx.lineTo(pts[idx2].x + (pts[idx2].jX||0), pts[idx2].y + (pts[idx2].jY||0)); ctx.stroke(); }
 
 document.addEventListener("DOMContentLoaded", function() {
   let audioCtx, masterGain, analyser, isPlaying=false;
   let playbackStartTime=0, playbackDuration=0, animationFrameId;
-  let undoStack=[], liveNodes=[], liveGainNode=null;
+  let undoStack=[], liveNodes=[], liveGainNode=null, liveFilterNode=null;
   let dataArray, lastAvg = 0;
 
   const toolSelect = document.getElementById("toolSelect"), brushSelect = document.getElementById("brushSelect"), sizeSlider = document.getElementById("brushSizeSlider"), chordSelect = document.getElementById("chordSelect"), harmonizeCheckbox = document.getElementById("harmonizeCheckbox"), pigeonImg = document.getElementById("pigeon");
@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded", function() {
         document.querySelectorAll(".pad").forEach(p => p.classList.remove("active", "queued")); pad.classList.add("active");
       } else if (patternBanks[b] && patternBanks[b][i]) {
         if (isPlaying) { queuedPattern = { data: patternBanks[b][i], pad: pad }; document.querySelectorAll(".pad").forEach(p => p.classList.remove("queued")); pad.classList.add("queued"); }
-        else { loadPatternData(patternBanks[b][i]); document.querySelectorAll(".pad").forEach(p => p.classList.remove("active", "queued")); pad.classList.add("active"); }
+        else { loadPatternData(patternBanks[b][i]); document.querySelectorAll(".pad").forEach(p => { p.classList.remove("active"); p.classList.remove("queued"); }); pad.classList.add("active"); }
       }
     });
   });
@@ -66,6 +66,7 @@ document.addEventListener("DOMContentLoaded", function() {
         document.getElementById("loopCheckbox").checked = d.settings.loop; 
         document.getElementById("scaleSelect").value = d.settings.scale; 
         document.getElementById("harmonizeCheckbox").checked = d.settings.harmonize; 
+        document.getElementById("scaleSelectContainer").style.display = d.settings.harmonize ? "inline" : "none";
         const bpmVal = parseFloat(d.settings.bpm) || 120;
         playbackDuration = (60 / bpmVal) * 32;
     }
@@ -82,6 +83,11 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   }
 
+  // --- HARMONIZE TOGGLE UI ---
+  harmonizeCheckbox.addEventListener("change", () => {
+    document.getElementById("scaleSelectContainer").style.display = harmonizeCheckbox.checked ? "inline" : "none";
+  });
+
   // --- INTERACTION ---
   tracks.forEach(track => {
     drawGrid(track);
@@ -93,7 +99,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     let drawing = false, curSeg = null;
     const start = e => {
-      e.preventDefault(); if(!audioCtx) initAudio();
+      e.preventDefault(); if(!audioCtx) initAudio(); if(audioCtx.state === "suspended") audioCtx.resume();
       const pos = getPos(e, track.canvas); const x = track.snap ? snap(pos.x, track.canvas.width) : pos.x;
       if(toolSelect.value === "draw") {
         drawing = true; let jX=0, jY=0; if(brushSelect.value==="fractal"){ jX=Math.random()*20-10; jY=Math.random()*40-20; }
@@ -119,13 +125,25 @@ document.addEventListener("DOMContentLoaded", function() {
   });
 
   // --- AUDIO ---
-  function initAudio() { if(audioCtx) return; audioCtx = new (window.AudioContext || window.webkitAudioContext)(); masterGain = audioCtx.createGain(); masterGain.gain.value = 0.5; analyser = audioCtx.createAnalyser(); analyser.fftSize = 64; dataArray = new Uint8Array(analyser.frequencyBinCount); masterGain.connect(analyser).connect(audioCtx.destination); }
+  function initAudio() { 
+    if(audioCtx) return; audioCtx = new (window.AudioContext || window.webkitAudioContext)(); 
+    masterGain = audioCtx.createGain(); masterGain.gain.value = 0.5; 
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 64; 
+    dataArray = new Uint8Array(analyser.frequencyBinCount); 
+    
+    const compressor = audioCtx.createDynamicsCompressor(); //
+    masterGain.connect(compressor).connect(analyser).connect(audioCtx.destination); 
+  }
   
   function startLiveSynth(track, y) { 
     if(track.mute || track.vol < 0.01) return; 
     liveNodes = []; liveGainNode = audioCtx.createGain(); 
     liveGainNode.gain.setValueAtTime(0, audioCtx.currentTime); 
     liveGainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime+0.01); 
+
+    liveFilterNode = audioCtx.createBiquadFilter(); //
+    liveFilterNode.type = "lowpass"; liveFilterNode.Q.value = 10; liveFilterNode.frequency.value = 20000;
+
     let freq = mapY(y, track.canvas.height); if(harmonizeCheckbox.checked) freq = quantize(freq); 
     const ivs = (brushSelect.value==="chord") ? chordIntervals[chordSelect.value] : [0]; 
     ivs.forEach(iv => { 
@@ -138,13 +156,19 @@ document.addEventListener("DOMContentLoaded", function() {
         osc.start(); liveNodes.push(osc); 
     }); 
     const trackG = audioCtx.createGain(); trackG.gain.value = track.vol;
-    liveGainNode.connect(trackG).connect(masterGain); 
+    liveGainNode.connect(liveFilterNode).connect(trackG).connect(masterGain); 
     liveGainNode.out = trackG;
   }
 
   function updateLiveSynth(track, y) { if(!liveGainNode) return; let freq = mapY(y, track.canvas.height); if(harmonizeCheckbox.checked) freq = quantize(freq); liveNodes.forEach((n, i) => { const ivs = (brushSelect.value==="chord") ? chordIntervals[chordSelect.value] : [0]; n.frequency.setTargetAtTime(freq * Math.pow(2, (ivs[i]||0)/12), audioCtx.currentTime, 0.02); }); }
   
-  function stopLiveSynth() { if(!liveGainNode) return; const gn = liveGainNode, ns = liveNodes; gn.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); setTimeout(() => { ns.forEach(n=>n.stop()); if(gn.out) gn.out.disconnect(); gn.disconnect(); }, 100); liveGainNode = null; }
+  function stopLiveSynth() { 
+    if(!liveGainNode) return; const gn = liveGainNode, ns = liveNodes; 
+    const isChord = (brushSelect.value === "chord");
+    gn.gain.setTargetAtTime(0, audioCtx.currentTime, isChord ? 0.005 : 0.05); //
+    setTimeout(() => { ns.forEach(n=>n.stop()); if(gn.out) gn.out.disconnect(); if(liveFilterNode) liveFilterNode.disconnect(); gn.disconnect(); }, 100); 
+    liveNodes = []; liveGainNode = null; liveFilterNode = null;
+  }
   
   function triggerParticleGrain(track, y) { 
     if(track.mute || track.vol < 0.01) return; 
@@ -169,7 +193,8 @@ document.addEventListener("DOMContentLoaded", function() {
           seg.points.forEach(p => { 
             const t = Math.max(0, start + (p.x/track.canvas.width)*playbackDuration); 
             const osc = targetCtx.createOscillator(); osc.type = track.wave; 
-            osc.frequency.value = (harmonizeCheckbox.checked?quantize(mapY(p.y, 100)):mapY(p.y, 100)); 
+            let f = mapY(p.y, 100); if(harmonizeCheckbox.checked) f = quantize(f);
+            osc.frequency.value = f;
             const env = targetCtx.createGain(); env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.4, t+0.01); env.gain.exponentialRampToValueAtTime(0.01, t+0.15); 
             osc.connect(env).connect(trkG); osc.start(t); osc.stop(t+0.2); 
             if (targetCtx === audioCtx) activeNodes.push(osc); 
@@ -180,12 +205,12 @@ document.addEventListener("DOMContentLoaded", function() {
         if(brush==="chord") { 
           chordIntervals[seg.chordType||"major"].forEach(iv => { 
             const osc = targetCtx.createOscillator(); osc.type=track.wave; const g=targetCtx.createGain(); g.gain.setValueAtTime(0, sT); g.gain.linearRampToValueAtTime(0.2, sT+0.005); g.gain.setValueAtTime(0.2, eT); g.gain.linearRampToValueAtTime(0, eT+0.05); 
-            osc.connect(g).connect(trkG); sorted.forEach(p=>{ const t = Math.max(0, start + (p.x/track.canvas.width)*playbackDuration); osc.frequency.linearRampToValueAtTime((harmonizeCheckbox.checked?quantize(mapY(p.y, 100)):mapY(p.y, 100))*Math.pow(2, iv/12), t); }); 
+            osc.connect(g).connect(trkG); sorted.forEach(p=>{ const t = Math.max(0, start + (p.x/track.canvas.width)*playbackDuration); let f = mapY(p.y, 100); if(harmonizeCheckbox.checked) f = quantize(f); osc.frequency.linearRampToValueAtTime(f * Math.pow(2, iv/12), t); }); 
             osc.start(sT); osc.stop(eT+0.1); 
             if (targetCtx === audioCtx) activeNodes.push(osc); 
           }); return; 
         }
-        const osc = targetCtx.createOscillator(); osc.type=track.wave; const g=targetCtx.createGain(); g.gain.setValueAtTime(0, sT); g.gain.linearRampToValueAtTime(0.3, sT+0.02); g.gain.setValueAtTime(0.3, eT); g.gain.linearRampToValueAtTime(0, eT+0.1); if(brush==="fractal"){ const sh = targetCtx.createWaveShaper(); sh.curve=getDistortionCurve(); osc.connect(sh).connect(g); } else { osc.connect(g); } g.connect(trkG); sorted.forEach(p=>{ const t = Math.max(0, start + (p.x/track.canvas.width)*playbackDuration); osc.frequency.linearRampToValueAtTime((harmonizeCheckbox.checked?quantize(mapY(p.y, 100)):mapY(p.y, 100)), t); }); 
+        const osc = targetCtx.createOscillator(); osc.type=track.wave; const g=targetCtx.createGain(); g.gain.setValueAtTime(0, sT); g.gain.linearRampToValueAtTime(0.3, sT+0.02); g.gain.setValueAtTime(0.3, eT); g.gain.linearRampToValueAtTime(0, eT+0.1); if(brush==="fractal"){ const sh = targetCtx.createWaveShaper(); sh.curve=getDistortionCurve(); osc.connect(sh).connect(g); } else { osc.connect(g); } g.connect(trkG); sorted.forEach(p=>{ const t = Math.max(0, start + (p.x/track.canvas.width)*playbackDuration); let f = mapY(p.y, 100); if(harmonizeCheckbox.checked) f = quantize(f); osc.frequency.linearRampToValueAtTime(f, t); }); 
         osc.start(sT); osc.stop(eT+0.2); 
         if (targetCtx === audioCtx) activeNodes.push(osc); 
       });
@@ -234,7 +259,16 @@ document.addEventListener("DOMContentLoaded", function() {
   
   function updateTrackVolume(t) { if(t.gainNode && audioCtx) { t.gainNode.gain.setTargetAtTime(t.mute ? 0 : t.vol, audioCtx.currentTime, 0.05); } }
 
-  function drawGrid(t) { t.ctx.save(); t.ctx.clearRect(0,0,t.canvas.width,t.canvas.height); t.ctx.lineWidth = 1; t.ctx.strokeStyle="#eee"; for(let i=0;i<=32;i++){ t.ctx.beginPath(); t.ctx.moveTo(i*(t.canvas.width/32),0); t.ctx.lineTo(i*(t.canvas.width/32),t.canvas.height); t.ctx.stroke(); } t.ctx.restore(); }
+  function drawGrid(t) { 
+    t.ctx.save(); t.ctx.clearRect(0,0,t.canvas.width,t.canvas.height); t.ctx.strokeStyle="#eee"; 
+    for(let i=0;i<=32;i++){ 
+        t.ctx.beginPath(); let x = i*(t.canvas.width/32); t.ctx.moveTo(x,0); t.ctx.lineTo(x,t.canvas.height); 
+        t.ctx.lineWidth = (i % 4 === 0) ? 2 : 1; //
+        t.ctx.stroke(); 
+    } 
+    t.ctx.restore(); 
+  }
+
   function erase(t,x,y) { t.segments=t.segments.filter(s=>!s.points.some(p=>Math.hypot(p.x-x,p.y-y)<20)); redrawTrack(t); }
 
   function redrawTrack(t, hx) {

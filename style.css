@@ -18,7 +18,7 @@ body {
   box-shadow: 0 0 20px rgba(0,0,0,0.1); 
 }
 
-h1 { margin-top: 0; font-family: "Courier New", monospace; }
+h1 { font-family: "Courier New", monospace; margin-top: 0; }
 
 /* --- TRACKS --- */
 .track-container { display: flex; align-items: center; gap: 8px; background: #fff; padding: 5px; border: 1px solid #ddd; margin-bottom: 10px; }
@@ -27,9 +27,9 @@ h1 { margin-top: 0; font-family: "Courier New", monospace; }
 .wave-btn.active { background-color: #555; color: #fff; }
 .legend { width: 35px; font-size: 10px; text-align: right; color: #888; line-height: 1.2; }
 canvas { border: 1px solid #ccc; background-color: #fff; cursor: crosshair; display: block; }
+
 .controls-right { display: flex; flex-direction: column; align-items: center; width: 80px; }
 .mute-btn { width: 100%; font-size: 11px; cursor: pointer; margin-bottom: 5px; }
-.vol-box { width: 100%; text-align: center; }
 .volume-slider { width: 100%; cursor: pointer; }
 .snap-label { font-size: 11px; margin-top: 5px; }
 
@@ -42,106 +42,55 @@ canvas { border: 1px solid #ccc; background-color: #fff; cursor: crosshair; disp
 .control-row { display: flex; flex-wrap: wrap; gap: 15px; align-items: center; margin-bottom: 10px; }
 label { font-size: 14px; display: flex; align-items: center; gap: 5px; }
 button { padding: 5px 12px; cursor: pointer; background: #e9e9e9; border: 1px solid #999; border-radius: 3px; font-size: 13px; }
-button:hover { background: #d0d0d0; }
 input[type="number"] { width: 50px; }
 
 /* --- PATTERN MACHINE --- */
-#pattern-machine { flex: 0 0 240px; background: transparent; border: none; padding: 0; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
-.machine-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; color: #333; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-#saveModeBtn { background: #fff; color: #000; border: 1px solid #999; border-radius: 3px; cursor: pointer; padding: 3px 8px; font-size: 10px; transition: 0.2s; }
+#pattern-machine { flex: 0 0 240px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+.machine-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
 #saveModeBtn.active { background: #ff4444; color: white; border-color: #cc0000; animation: pulse 1s infinite; }
 .bank-row { display: flex; align-items: center; justify-content: space-between; margin-top: 5px; }
 .bank-label { font-weight: bold; font-size: 13px; color: #666; width: 15px; }
-.pad { width: 30px; height: 30px; background: #fcfcfc; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.pad { width: 30px; height: 30px; background: #fcfcfc; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; }
 .pad.filled { background: #c0c0c0; border-color: #999; }
 .pad.active { background: #666; border: 2px solid #ff4444; }
 .pad.queued { border: 2px solid #ffaa00; animation: fastPulse 0.3s infinite; }
 
-/* --- MOBILE OVERLAY (REPARIERT) --- */
+/* --- MOBILE OVERLAY (ZENTRIERT & BLICKDICHT) --- */
 #mobile-overlay { 
   display: none; 
   position: fixed; 
   top: 0; left: 0; 
-  width: 100vw; 
-  height: 100vh; 
+  width: 100vw; height: 100vh; 
+  min-width: 1000px; /* Verdeckt die App komplett */
   background-color: #ffffff; 
-  z-index: 100000; /* Extrem hoch, damit nichts durchscheint */
-  
-  /* Perfekte Zentrierung */
+  z-index: 100000; 
   justify-content: center; 
   align-items: center; 
   text-align: center; 
-  padding: 0;
-  margin: 0;
+  box-sizing: border-box;
 }
 
-.overlay-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center; 
-  justify-content: center;
-  width: 90%;
-  max-width: 400px; 
+.overlay-content { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 90%; max-width: 450px; }
+.overlay-content img { width: 70px; margin-bottom: 25px; animation: tilt 2s infinite ease-in-out; }
+.text-box { background: #f9f9f9; padding: 25px; border-radius: 12px; border: 1px solid #eee; width: 100%; display: flex; flex-direction: column; align-items: center; }
+.warning { font-weight: bold; color: #ff4444; margin-bottom: 15px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+.instruction { font-family: "Courier New", monospace; font-size: 15px; line-height: 1.6; color: #333; text-align: center; }
+
+/* --- LEGAL FOOTER --- */
+.legal-footer { margin-top: 30px; padding-bottom: 10px; text-align: center; font-size: 11px; color: #999; font-family: "Courier New", monospace; clear: both; }
+.legal-footer a { color: #777; text-decoration: none; padding: 0 5px; }
+.legal-footer a:hover { text-decoration: underline; color: #333; }
+
+/* --- MOBILE RESPONSIVENESS --- */
+@media (max-width: 1024px) {
+  body { padding: 0; margin: 0; overflow-x: auto !important; background-color: #ffffff; }
+  #main { transform: scale(0.6); transform-origin: top left; margin: 10px; width: 920px; }
 }
 
-.overlay-content img {
-  width: 80px;
-  height: auto;
-  margin-bottom: 25px;
-  animation: tilt 2s infinite ease-in-out;
-}
-
-.text-box {
-  background: #f9f9f9;
-  padding: 25px;
-  border-radius: 12px;
-  border: 1px solid #eee;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-}
-
-.warning {
-  font-family: Arial, sans-serif;
-  font-weight: bold;
-  color: #ff4444;
-  margin: 0 0 10px 0;
-  font-size: 14px;
-  text-transform: uppercase;
-}
-
-.instruction { 
-  font-family: "Courier New", monospace; 
-  font-size: 15px; 
-  line-height: 1.6;
-  color: #333;
-  margin: 0;
+@media screen and (orientation: portrait) and (max-width: 1024px) {
+  #mobile-overlay { display: flex !important; }
 }
 
 @keyframes tilt { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
-
-/* --- MOBILE SCALING & SCROLLING --- */
-@media (max-width: 1024px) {
-  body { 
-    padding: 0; 
-    margin: 0; 
-    overflow-x: auto !important; 
-    overflow-y: auto !important; 
-    background-color: #ffffff; /* Gleiche Farbe wie Overlay verhindert Blinken */
-  }
-  
-  #main { 
-    transform: scale(0.6); 
-    transform-origin: top left; 
-    margin: 10px;
-    width: 920px; 
-  }
-}
-
-/* Zeige Overlay nur im Portrait-Modus (Hochformat) */
-@media screen and (orientation: portrait) and (max-width: 1024px) {
-  #mobile-overlay { 
-    display: flex !important; 
-  }
-}
-
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 @keyframes fastPulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
